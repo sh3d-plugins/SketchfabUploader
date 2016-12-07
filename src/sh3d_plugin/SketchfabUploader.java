@@ -3,15 +3,16 @@ package sh3d_plugin;
 import java.awt.Component;
 import java.awt.KeyboardFocusManager;
 import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.OutputStream;
 import java.net.URL;
 import java.util.Locale;
 import java.util.ResourceBundle;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
+import java.util.zip.ZipOutputStream;
 
 import javax.swing.JOptionPane;
 
@@ -40,11 +41,16 @@ public class SketchfabUploader extends Plugin {
 
     @Override
     public void execute() {
-      exportFurnitureToFileSystem();
+      try {
+        exportFurnitureToFileSystem();
+      } catch (IOException e) {
+        // TODO Auto-generated catch block
+        e.printStackTrace();
+      }
     }
   }
 
-  private void exportFurnitureToFileSystem() {
+  private void exportFurnitureToFileSystem() throws IOException {
     ResourceBundle resource = ResourceBundle.getBundle("sh3d_plugin.ApplicationPlugin",
         Locale.getDefault(), getPluginClassLoader());
     Component focusOwner = KeyboardFocusManager.getCurrentKeyboardFocusManager().getActiveWindow();
@@ -59,12 +65,22 @@ public class SketchfabUploader extends Plugin {
     // HomePieceOfFurniture piece = (HomePieceOfFurniture) item;
     for (HomePieceOfFurniture piece : home.getFurniture()) {
       if (piece.isMovable()) {
+        File baseDirectory = new File(getTempDir());
+        File testDirectory = new File(baseDirectory, "test");
+        File zipFile = new File(testDirectory, piece.getName() + ".zip");
+        ZipOutputStream zipOut = null;
         try {
           Debugger.log(String.format("Try to export furniture, name: %s, info: %s", piece.getName(),
               piece.getInformation()));
-          exportPieceOfFurnitureEntries(piece);
+          zipOut = new ZipOutputStream(new FileOutputStream(zipFile));
+          exportPieceOfFurnitureEntries(zipOut, piece);
+        } catch (FileNotFoundException e) {
+          showExportError(focusOwner, resource, e);
         } catch (IOException e) {
           showExportError(focusOwner, resource, e);
+        } finally {
+          // Finish zip writing
+          zipOut.finish();
         }
       }
     }
@@ -73,7 +89,7 @@ public class SketchfabUploader extends Plugin {
   /**
    * Export the icon and the model entries of a given <code>piece</code>.
    */
-  private void exportPieceOfFurnitureEntries(HomePieceOfFurniture piece) throws IOException {
+  private void exportPieceOfFurnitureEntries(ZipOutputStream zipOut, HomePieceOfFurniture piece) throws IOException {
     // exportEntry(getEntryName(piece.getIcon()), piece.getIcon());
 
     if (piece.getModel() instanceof URLContent && ((URLContent) piece.getModel()).isJAREntry()) {
@@ -85,10 +101,10 @@ public class SketchfabUploader extends Plugin {
       String dir = jarEntryName.substring(0, jarEntryName.lastIndexOf('/') + 1);
       // Only export data in the same dir as the obj file
       // If model is 1/iphone.obj, then export 1/iphone.mtl, 1/iphone.jpg ...
-      exportEntries(dir, urlContent);
+      exportEntries(zipOut, dir, urlContent);
     } else {
       Debugger.log("Not URLContent");
-      exportEntry(getEntryName(piece.getModel()), piece.getModel());
+      exportEntry(zipOut, getEntryName(piece.getModel()), piece.getModel());
     }
   }
 
@@ -114,7 +130,7 @@ public class SketchfabUploader extends Plugin {
    * 
    * @param dir export files under this directory, e.g. 1/
    */
-  private void exportEntries(String dir, URLContent urlContent) throws IOException {
+  private void exportEntries(ZipOutputStream zipOut, String dir, URLContent urlContent) throws IOException {
     ZipInputStream zipIn = null;
     try {
       // Open zipped stream that contains urlContent
@@ -130,7 +146,7 @@ public class SketchfabUploader extends Plugin {
           Content siblingContent =
               new URLContent(new URL("jar:" + urlContent.getJAREntryURL() + "!/" + zipEntryName));
           String fileName = getLastName(zipEntryName);
-          exportEntry(fileName, siblingContent);
+          exportEntry(zipOut, fileName, siblingContent);
         }
       }
     } finally {
@@ -152,25 +168,21 @@ public class SketchfabUploader extends Plugin {
   /**
    * export a new entry named <code>entryName</code> that contains a given <code>content</code>.
    */
-  private void exportEntry(String entryName, Content content) throws IOException {
+  private void exportEntry(ZipOutputStream zipOut, String entryName, Content content) throws IOException {
     if (Debugger.isEnabled()) {
       Debugger.log("entryName: " + entryName);
     }
 
+    byte [] buffer = new byte [8192];
     InputStream contentIn = null;
     try {
-      contentIn = content.openStream();
-      File baseDirectory = new File(getTempDir());
-      File testDirectory = new File(baseDirectory, "test");
-      File objFile = new File(testDirectory, entryName);
-      OutputStream out;
-      out = new FileOutputStream(objFile);
-      byte[] buffer = new byte[8192];
-      int size;
+      zipOut.putNextEntry(new ZipEntry(entryName));
+      contentIn = content.openStream();          
+      int size; 
       while ((size = contentIn.read(buffer)) != -1) {
-        out.write(buffer, 0, size);
+        zipOut.write(buffer, 0, size);
       }
-      out.close();
+      zipOut.closeEntry();
     } catch (IOException e) {
       JOptionPane.showMessageDialog(null, e.getMessage());
       e.printStackTrace();
