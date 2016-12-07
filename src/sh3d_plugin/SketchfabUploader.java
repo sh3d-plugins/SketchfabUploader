@@ -160,7 +160,9 @@ public class SketchfabUploader extends Plugin {
     InputStream contentIn = null;
     try {
       contentIn = content.openStream();
-      File objFile = new File("/tmp/test/" + entryName);
+      File baseDirectory = new File(getTempDir());
+      File testDirectory = new File(baseDirectory, "test");
+      File objFile = new File(testDirectory, entryName);
       OutputStream out;
       out = new FileOutputStream(objFile);
       byte[] buffer = new byte[8192];
@@ -181,6 +183,21 @@ public class SketchfabUploader extends Plugin {
         Debugger.log(String.format("Success to export entry: %s", entryName));
       }
     }
+  }
+  
+  /**
+   * Get system temp dir
+   * 
+   * - /tmp/
+   * - %WinDir%\Temp\
+   * - %USERPROFILE%\Local Settings\Temp\
+   * - %USERPROFILE%\AppData\Local\Temp\
+   * 
+   * @return String
+   */
+  private String getTempDir() {
+    String property = "java.io.tmpdir";
+    return System.getProperty(property);
   }
 
   /**
