@@ -3,6 +3,7 @@ package sh3d_plugin;
 import java.awt.Component;
 import java.awt.KeyboardFocusManager;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -10,6 +11,15 @@ import java.util.Locale;
 import java.util.ResourceBundle;
 
 import javax.swing.JOptionPane;
+
+import org.apache.http.HttpEntity;
+import org.apache.http.client.methods.CloseableHttpResponse;
+import org.apache.http.client.methods.HttpPost;
+import org.apache.http.entity.ContentType;
+import org.apache.http.entity.mime.MultipartEntityBuilder;
+import org.apache.http.impl.client.CloseableHttpClient;
+import org.apache.http.impl.client.HttpClients;
+import org.apache.http.util.EntityUtils;
 
 import com.eteks.sweethome3d.model.Home;
 import com.eteks.sweethome3d.model.HomePieceOfFurniture;
@@ -64,16 +74,51 @@ public class SketchfabUploader extends Plugin {
   }
   
   private void exportFurniture(Component focusOwner, ResourceBundle resource, HomePieceOfFurniture piece) throws IOException {
+    exportFurniture(focusOwner, resource, piece, piece.getName() + ".zip");
+  }
+  
+  private void exportFurniture(Component focusOwner, ResourceBundle resource, HomePieceOfFurniture piece, String filename) throws IOException {
     DefaultFurnitureOutputStream furnitureOut = null;
     File baseDirectory = new File(getTempDir());
     File testDirectory = new File(baseDirectory, "test");
-    File furniturePackageFile = new File(testDirectory, piece.getName() + ".zip");
+    File furniturePackageFile = new File(testDirectory, filename);
     try {
       Debugger.log(String.format("Try to export furniture, name: %s, info: %s", piece.getName(),
           piece.getInformation()));
       furnitureOut = new DefaultFurnitureOutputStream(new FileOutputStream(furniturePackageFile));
       // Write home with HomeOuputStream
       furnitureOut.writeFurniture(piece);
+      
+      // Upload to sketchfab
+      Debugger.log(String.format("Start uploading..."));
+      
+      CloseableHttpClient httpClient = HttpClients.createDefault();
+      HttpPost uploadFile = new HttpPost("https://sketchfab.com/v2/models");
+      
+      MultipartEntityBuilder builder = MultipartEntityBuilder.create();
+      builder.addTextBody("source", "sweethome3d-uploader", ContentType.TEXT_PLAIN);
+      builder.addTextBody("name", "A test model", ContentType.TEXT_PLAIN);
+      builder.addTextBody("description", "This is a test model I made with love and passion", ContentType.TEXT_PLAIN);
+      builder.addTextBody("password", "", ContentType.TEXT_PLAIN);
+      builder.addTextBody("private", "0", ContentType.TEXT_PLAIN);
+      builder.addTextBody("tags", "sweethome3d-uploader sweethome3d", ContentType.TEXT_PLAIN);
+      builder.addTextBody("token", "", ContentType.TEXT_PLAIN);
+      // This attaches the file to the POST:
+      builder.addBinaryBody(
+          "modelFile",
+          new FileInputStream(furniturePackageFile),
+          ContentType.APPLICATION_OCTET_STREAM,
+          filename
+      );
+      HttpEntity multipart = builder.build();
+      uploadFile.setEntity(multipart);
+      
+      CloseableHttpResponse response = httpClient.execute(uploadFile);
+      HttpEntity responseEntity = response.getEntity();
+      String responseString = EntityUtils.toString(responseEntity, "UTF-8");
+      System.out.println(responseString);
+      Debugger.log(String.format("HTTP Response: %s", responseString));
+      
     } catch (FileNotFoundException e) {
       showExportError(focusOwner, resource, e);
     } catch (IOException e) {
