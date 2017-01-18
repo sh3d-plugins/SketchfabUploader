@@ -6,6 +6,7 @@ import javax.swing.JLabel;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JTextField;
+import javax.swing.SpringLayout;
 import javax.swing.SwingUtilities;
 
 import org.apache.http.HttpEntity;
@@ -48,35 +49,48 @@ public class UploadFrame extends JFrame implements ActionListener {
     
     Debugger.log("Created GUI on EDT? " + SwingUtilities.isEventDispatchThread());
     
-    JFrame f = new JFrame("UploadFrame");
-    f.setDefaultCloseOperation(JFrame.HIDE_ON_CLOSE);
-    
-    JPanel uploadPanel = new JPanel(new GridBagLayout());
-    
-    uploadPanel.add(new JLabel("Model name:"));
-    this.nameField = new JTextField(20);
-    uploadPanel.add(this.nameField);
+    String[] labels = {"Model name: ", "Model description: ", "Model tags: ", "API token: "};
+    int numPairs = labels.length;
 
-    uploadPanel.add(new JLabel("Model description:"));
-    this.descriptionField = new JTextField(20);
-    uploadPanel.add(this.descriptionField);
-
-    uploadPanel.add(new JLabel("Model tags:"));
-    this.tagsField = new JTextField(20);
-    uploadPanel.add(this.tagsField);
-
-    uploadPanel.add(new JLabel("API token:"));
-    this.apiTokenField = new JTextField(20);
-    uploadPanel.add(this.apiTokenField);
+    //Create and populate the panel.
+    JPanel uploadPanel = new JPanel(new SpringLayout());
+    for (int i = 0; i < numPairs; i++) {
+        JLabel l = new JLabel(labels[i], JLabel.TRAILING);
+        uploadPanel.add(l);
+        JTextField textField = new JTextField(10);
+        l.setLabelFor(textField);
+        uploadPanel.add(textField);
+    }
     
     JButton uploadButton = new JButton("Upload");
     uploadButton.addActionListener(this);
     uploadButton.setActionCommand("uploadAction");
     uploadPanel.add(uploadButton);
+    //numPairs++;
     
-    f.add(uploadPanel);
-    f.pack();
-    f.setVisible(true);
+    JButton cancelButton = new JButton("Cancel");
+    cancelButton.addActionListener(this);
+    cancelButton.setActionCommand("uploadAction");
+    uploadPanel.add(cancelButton);
+    numPairs++;
+
+    //Lay out the panel.
+    SpringUtilities.makeCompactGrid(uploadPanel,
+                                    numPairs, 2, //rows, cols
+                                    6, 6,        //initX, initY
+                                    6, 6);       //xPad, yPad
+
+    //Create and set up the window.
+    //JFrame frame = new JFrame("UploadFrame");
+    this.setDefaultCloseOperation(JFrame.HIDE_ON_CLOSE);
+
+    //Set up the content pane.
+    uploadPanel.setOpaque(true);  //content panes must be opaque
+    this.setContentPane(uploadPanel);
+
+    //Display the window.
+    this.pack();
+    this.setVisible(true);
   }
 
   // Operation performed when the uploadButton is clicked:
